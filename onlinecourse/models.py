@@ -5,11 +5,8 @@ try:
 except Exception:
     print("There was an error loading django modules. Do you have django installed?")
     sys.exit()
-
 from django.conf import settings
 import uuid
-
-
 # Instructor model
 class Instructor(models.Model):
     user = models.ForeignKey(
@@ -18,11 +15,8 @@ class Instructor(models.Model):
     )
     full_time = models.BooleanField(default=True)
     total_learners = models.IntegerField()
-
     def __str__(self):
         return self.user.username
-
-
 # Learner model
 class Learner(models.Model):
     user = models.ForeignKey(
@@ -50,18 +44,26 @@ class Learner(models.Model):
     def __str__(self):
         return self.user.username + "," + \
                self.occupation
+            self.occupation
 
 
 # Course model
 class Course(models.Model):
     name = models.CharField(null=False, max_length=30, default='online course')
     image = models.ImageField(upload_to='course_images/')
+    # image = models.ImageField(upload_to='course_images/')
     description = models.CharField(max_length=1000)
     pub_date = models.DateField(null=True)
     instructors = models.ManyToManyField(Instructor)
     users = models.ManyToManyField(settings.AUTH_USER_MODEL, through='Enrollment')
+    users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through='Enrollment')
     total_enrollment = models.IntegerField(default=0)
     is_enrolled = False
+
+    def get_dirs(self):
+        got_dirs = dir(self)
+        return list(got_dirs)
 
     def __str__(self):
         return "Name: " + self.name + "," + \
@@ -75,6 +77,9 @@ class Lesson(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     content = models.TextField()
 
+    def __str__(self):
+        return self.title
+
 
 # Enrollment model
 # <HINT> Once a user enrolled a class, an enrollment entry should be created between the user and course
@@ -82,13 +87,13 @@ class Lesson(models.Model):
 class Enrollment(models.Model):
     AUDIT = 'audit'
     HONOR = 'honor'
-    BETA = 'BETA'
-    COURSE_MODES = [
-        (AUDIT, 'Audit'),
+@@ -88,47 +92,70 @@ class Enrollment(models.Model):
         (HONOR, 'Honor'),
         (BETA, 'BETA')
     ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     date_enrolled = models.DateField(default=now)
     mode = models.CharField(max_length=5, choices=COURSE_MODES, default=AUDIT)
@@ -132,3 +137,62 @@ class Enrollment(models.Model):
 #    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
 #    choices = models.ManyToManyField(Choice)
 #    Other fields and methods you would like to design
+class Question(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE)
+    question_text = models.CharField(max_length=200)
+    grade = models.FloatField(default=0.0)
+
+    def is_get_score(self, selected_ids):
+        all_answers = self.choice_set.filter(is_correct=True).count()
+        selected_correct = self.choice_set.filter(
+            is_correct=True, id__in=selected_ids).count()
+        if all_answers == selected_correct:
+            return True
+        else:
+            return False
+
+    def __str__(self):
+        return self.question_text
+
+
+class Choice(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    choice_text = models.CharField(max_length=100)
+    is_correct = models.BooleanField(default=False)
+
+    def get_dirs(self):
+        got_dirs = dir(self)
+        return list(got_dirs)
+
+    def __str__(self):
+        return self.choice_text
+
+
+class Submission(models.Model):
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
+    # question needs to match up with its choices
+    # question = models.
+    choices = models.ManyToManyField(Choice)
+
+    def get_dirs(self):
+        got_dirs = dir(self)
+        return list(got_dirs)
+
+    def calculate_grade(self):
+        total_correct = []
+        total_wrong = []
+        for choice in self.choices.all():
+            if (choice.is_correct):
+                total_correct.append(choice)
+            else:
+                total_wrong.append(choice)
+        grade = 100 * (len(total_correct) /
+                       (len(total_correct) + len(total_wrong)))
+        return int(grade)
+
+    def __str__(self):
+        return f'Submission {self.pk}'
+
+    def get_choices(self):
+        return list(self.choices.all())
